@@ -25,7 +25,7 @@ This file tracks which phases are complete and provides context for future Claud
 | 6 | calls.py | ✅ Complete | CallEdgeExtractor visitor; CALLS edges; TYPE_CHECKING suppression; builtin skip; self/cls skip; cross-module binding resolution; dynamic_call warnings; 26 tests pass | 6 |
 | 7 | decorators.py | ✅ Complete | DECORATES edges; role tagging (8 patterns); getattr dispatch warnings; local+import decorator resolution; __init__ canonical normalization; 23 tests pass | 7 |
 | 8 | graph.py | ✅ Complete | build_nx_graph; find_cycles (nx.simple_cycles + dedup); _find_unused_symbols (dunders/exports/roots excluded); _detect_communities (Louvain); 22 tests pass | 8 |
-| 9 | serializer.py | ⬜ PENDING | JSON serialization | TBD |
+| 9 | serializer.py | ✅ Complete | serialize(pg, nx_graph, communities, unused, cycles, root) → JSON str; dangling edge filter; enum .value; null community/role; ISO timestamp; 24 tests pass | 9 |
 | 10 | tracer.py | ⬜ PENDING | Runtime tracing (stretch) | TBD |
 | - | CLI | ⬜ PENDING | Typer CLI wrapper | TBD |
 | - | API | ⬜ PENDING | FastAPI service | TBD |
@@ -92,29 +92,30 @@ All phases must handle:
 
 ## Current Session Notes
 
-**Session:** 8
+**Session:** 9
 **Assignee:** Claude Code (Sonnet 4.6)
-**Task:** Implement Phase 8 — engine/graph.py
+**Task:** Implement Phase 9 — engine/serializer.py
 
 ### What you did this session:
-1. Implemented `engine/graph.py` — `GraphAssemblyResult` dataclass, `build_nx_graph`, `find_cycles`, `_find_unused_symbols`, `_build_roots_set`, `_detect_communities` (Louvain)
-2. Seeded fixture: `mutual_calls/__init__.py` (ping↔pong mutual call for cycle test)
-3. Wrote `tests/test_graph.py` with 22 tests; all pass
-4. Full suite: 208 passed
+1. Implemented `engine/serializer.py` — `serialize(pg, nx_graph, communities, unused, cycles, root) -> str`
+2. Wrote `tests/test_serializer.py` with 24 tests; all pass
+3. Full suite: 232 passed
 
 ### Key decisions:
-- `GraphAssemblyResult` defined in `graph.py` (not models.py) to keep networkx out of models.py
-- Cycle detection: `nx.simple_cycles(G)` on full graph (CALLS/INHERITS/DECORATES); IMPORTS edges don't exist in ProjectGraph (Phase 4 only populated bindings), so circular_import_a/b fixture can't be used for cycle tests
-- Unused exclusions: dunders (`__` prefix+suffix), `__all__` exports, test file roots (test_*.py / *_test.py), `__main__.py` roots
-- Community detection: Louvain on undirected module/package subgraph; falls back to `{}` on any exception
+- `nx_graph` parameter accepted but not used in the body (community/unused/cycles come from `GraphAssemblyResult`; kept for API symmetry with the spec signature)
+- Dangling edge filter: `if e.src in pg.nodes and e.dst in pg.nodes` before emitting edges
+- `datetime.datetime.now(datetime.UTC).isoformat()` used instead of deprecated `utcnow()` — same ISO format
+- `community` field: `communities.get(nid)` → `None` (JSON `null`) when not clustered
+- `role` field: `n.role` directly (set by Phase 7, `None` for plain functions)
 
 ### Blockers / Questions:
 - None
 
 ### Next Steps:
-Phase 9 — `engine/serializer.py`. Context: `docs/09_SERIALIZATION.md` + this file.
+Phase 10 — `engine/tracer.py` (runtime tracing, stretch goal). Context: `docs/10_RUNTIME_TRACING.md` + this file.
+CLI — `cli.py` (Typer wrapper). Context: `docs/INTEGRATION_PLAN.md` + this file.
 
 ---
 
-**Last Updated:** Session 8
-**Last Verified:** Session 8 — `python -m pytest tests/test_models.py tests/test_discovery.py tests/test_parser.py tests/test_resolver.py tests/test_definitions.py tests/test_calls.py tests/test_decorators.py tests/test_graph.py` → 208 passed
+**Last Updated:** Session 9
+**Last Verified:** Session 9 — `python -m pytest tests/test_models.py tests/test_discovery.py tests/test_parser.py tests/test_resolver.py tests/test_definitions.py tests/test_calls.py tests/test_decorators.py tests/test_graph.py tests/test_serializer.py` → 232 passed
