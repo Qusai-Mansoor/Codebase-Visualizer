@@ -19,7 +19,7 @@ This file tracks which phases are complete and provides context for future Claud
 |-------|--------|--------|-------|---------|
 | 1 | models.py | ✅ Complete | All dataclasses + enums; 27 tests pass | 1 |
 | 2 | discovery.py | ✅ Complete | SKIP_DIRS, src-layout, namespace pkgs, .pyi stubs; 25 tests pass | 2 |
-| 3 | parser.py | ⬜ PENDING | AST parsing with error handling | TBD |
+| 3 | parser.py | ✅ Complete | UTF-8/latin-1 fallback, SyntaxError → failed, empty files OK; 25 tests pass | 3 |
 | 4 | resolver.py | ⬜ PENDING | Import resolution (jedi + manual) | TBD |
 | 5 | definitions.py | ⬜ PENDING | Definition extraction from AST | TBD |
 | 6 | calls.py | ⬜ PENDING | Call edge extraction | TBD |
@@ -92,29 +92,30 @@ All phases must handle:
 
 ## Current Session Notes
 
-**Session:** 2
+**Session:** 3
 **Assignee:** Claude Code (Sonnet 4.6)
-**Task:** Implement Phase 2 — engine/discovery.py
+**Task:** Implement Phase 3 — engine/parser.py
 
 ### What you did this session:
-1. Implemented `engine/discovery.py` — `discover(root)` with SKIP_DIRS, large-file guard, `__init__.py` package aliases, src-layout detection, namespace-package inference, `.pyi` stub collection
-2. Added `stub_map` field to `DiscoveryResult` in `models.py`
-3. Seeded `tests/fixtures/simple_pkg/` (`__init__.py` + `core.py`) and `tests/fixtures/namespace_pkg/` (`utils.py`, no `__init__.py`)
-4. Wrote `tests/test_discovery.py` with 25 tests; all pass
-5. Both test suites together: 52 passed
+1. Implemented `engine/parser.py` — `parse_all(discovery)` iterating `module_map`, `_read_source` with UTF-8 → latin-1 fallback, `ast.parse(type_comments=True)` + `ast.fix_missing_locations`, SyntaxError and OSError both caught and logged to `failed`
+2. Added `_looks_like_version_mismatch` heuristic to annotate SyntaxErrors on match/case/type keywords
+3. Seeded `tests/fixtures/parse_suite/` — `__init__.py`, `valid_module.py`, `empty_module.py`
+4. Wrote `tests/test_parser.py` with 25 tests; all pass
+5. Full suite: 77 passed (27 models + 25 discovery + 25 parser)
 
 ### Key decisions:
-- Tests call `discover(FIXTURES)` (the fixtures parent) so package names appear as dotted prefixes — calling `discover(FIXTURES/simple_pkg)` would strip the package name from paths
-- `stub_map` added to `DiscoveryResult` now (referenced in Phase 4 import resolution)
-- `stat()` wrapped in `try/except OSError` as race-condition guard
+- Fixture-based tests call `_discover_and_parse(FIXTURES)` (not `PARSE_SUITE`) so dotted names include `parse_suite.` prefix — same pattern as Phase 2 discovery tests
+- Used a `session`-scoped pytest fixture for the FIXTURES parse result to avoid repeated filesystem I/O in the fixture-based tests
+- latin-1 encoding tested via `tmp_path` (raw bytes with `\xe9`) — no need for a committed binary fixture
+- Empty file (0 bytes) is a first-class fixture in `parse_suite/empty_module.py`
 
 ### Blockers / Questions:
 - None
 
 ### Next Steps:
-Phase 3 — `engine/parser.py`. Context: `docs/03_PARSING.md` + this file.
+Phase 4 — `engine/resolver.py`. Context: `docs/04_IMPORT_RESOLUTION.md` + this file.
 
 ---
 
-**Last Updated:** Session 2
-**Last Verified:** Session 2 — `python -m pytest tests/test_models.py tests/test_discovery.py` → 52 passed
+**Last Updated:** Session 3
+**Last Verified:** Session 3 — `python -m pytest tests/test_models.py tests/test_discovery.py tests/test_parser.py` → 77 passed
