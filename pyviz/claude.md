@@ -20,7 +20,7 @@ This file tracks which phases are complete and provides context for future Claud
 | 1 | models.py | ✅ Complete | All dataclasses + enums; 27 tests pass | 1 |
 | 2 | discovery.py | ✅ Complete | SKIP_DIRS, src-layout, namespace pkgs, .pyi stubs; 25 tests pass | 2 |
 | 3 | parser.py | ✅ Complete | UTF-8/latin-1 fallback, SyntaxError → failed, empty files OK; 25 tests pass | 3 |
-| 4 | resolver.py | ⬜ PENDING | Import resolution (jedi + manual) | TBD |
+| 4 | resolver.py | ✅ Complete | __init__ re-export chain, TYPE_CHECKING, cycles, wildcards/__all__, jedi fallback; 26 tests pass | 4 |
 | 5 | definitions.py | ⬜ PENDING | Definition extraction from AST | TBD |
 | 6 | calls.py | ⬜ PENDING | Call edge extraction | TBD |
 | 7 | decorators.py | ⬜ PENDING | Decorator & dynamic dispatch | TBD |
@@ -92,30 +92,30 @@ All phases must handle:
 
 ## Current Session Notes
 
-**Session:** 3
+**Session:** 4
 **Assignee:** Claude Code (Sonnet 4.6)
-**Task:** Implement Phase 3 — engine/parser.py
+**Task:** Implement Phase 4 — engine/resolver.py
 
 ### What you did this session:
-1. Implemented `engine/parser.py` — `parse_all(discovery)` iterating `module_map`, `_read_source` with UTF-8 → latin-1 fallback, `ast.parse(type_comments=True)` + `ast.fix_missing_locations`, SyntaxError and OSError both caught and logged to `failed`
-2. Added `_looks_like_version_mismatch` heuristic to annotate SyntaxErrors on match/case/type keywords
-3. Seeded `tests/fixtures/parse_suite/` — `__init__.py`, `valid_module.py`, `empty_module.py`
-4. Wrote `tests/test_parser.py` with 25 tests; all pass
-5. Full suite: 77 passed (27 models + 25 discovery + 25 parser)
+1. Implemented `engine/resolver.py` — `resolve_all(discovery, parse_result)` with Strategy B (manual AST chain-follower) as primary for internal modules, jedi as optional fallback for external
+2. KEY BUG FIXED: `_resolve_relative` needed `is_package` param — without it, `from .core import Thing` in `reexport_pkg/__init__.py` (module_name = `'reexport_pkg'`, a single part) would `parts[:-1]` to `[]`, losing the package prefix entirely. Fix: when `is_package=True`, use `parts[:]` as anchor instead of `parts[:-1]`
+3. Seeded fixtures: `reexport_pkg/`, `circular_import_a/`, `circular_import_b/`, `type_checking_only/`, `allexport_pkg/`
+4. Wrote `tests/test_resolver.py` with 26 tests; all pass
+5. Full suite: 103 passed (27 models + 25 discovery + 25 parser + 26 resolver)
 
 ### Key decisions:
-- Fixture-based tests call `_discover_and_parse(FIXTURES)` (not `PARSE_SUITE`) so dotted names include `parse_suite.` prefix — same pattern as Phase 2 discovery tests
-- Used a `session`-scoped pytest fixture for the FIXTURES parse result to avoid repeated filesystem I/O in the fixture-based tests
-- latin-1 encoding tested via `tmp_path` (raw bytes with `\xe9`) — no need for a committed binary fixture
-- Empty file (0 bytes) is a first-class fixture in `parse_suite/empty_module.py`
+- `is_package` boolean passed to `_resolve_relative` — checked via `module_name in discovery.package_map`
+- TYPE_CHECKING test uses internal import (so binding is `ResolvedBinding` with `is_type_only`) — external imports produce `UnresolvedBinding` which doesn't have `is_type_only`
+- jedi used only when source module is NOT in `module_map` (external imports); for internal first-party code, Strategy B is more reliable
+- Wildcard `from x import *` resolves only names in `__all__`; without `__all__`, all public (non-`_`) top-level names
 
 ### Blockers / Questions:
 - None
 
 ### Next Steps:
-Phase 4 — `engine/resolver.py`. Context: `docs/04_IMPORT_RESOLUTION.md` + this file.
+Phase 5 — `engine/definitions.py`. Context: `docs/05_DEFINITIONS.md` + this file.
 
 ---
 
-**Last Updated:** Session 3
-**Last Verified:** Session 3 — `python -m pytest tests/test_models.py tests/test_discovery.py tests/test_parser.py` → 77 passed
+**Last Updated:** Session 4
+**Last Verified:** Session 4 — `python -m pytest tests/test_models.py tests/test_discovery.py tests/test_parser.py tests/test_resolver.py` → 103 passed

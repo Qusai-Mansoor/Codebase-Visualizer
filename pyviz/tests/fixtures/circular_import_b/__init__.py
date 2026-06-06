@@ -1,0 +1,1 @@
+from circular_import_a import something
