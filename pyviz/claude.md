@@ -17,7 +17,7 @@ This file tracks which phases are complete and provides context for future Claud
 
 | Phase | Module | Status | Notes | Session |
 |-------|--------|--------|-------|---------|
-| 1 | models.py | ⬜ PENDING | Define all dataclasses | TBD |
+| 1 | models.py | ✅ Complete | All dataclasses + enums; 27 tests pass | 1 |
 | 2 | discovery.py | ⬜ PENDING | File discovery & module mapping | TBD |
 | 3 | parser.py | ⬜ PENDING | AST parsing with error handling | TBD |
 | 4 | resolver.py | ⬜ PENDING | Import resolution (jedi + manual) | TBD |
@@ -92,26 +92,27 @@ All phases must handle:
 
 ## Current Session Notes
 
-**Session:** [SETUP]
-**Assignee:** Claude Code (Opus 4.8)
-**Task:** Set up project structure and documentation
+**Session:** 1
+**Assignee:** Claude Code (Sonnet 4.6)
+**Task:** Implement Phase 1 — models.py
 
 ### What you did this session:
-1. Created folder structure
-2. Created pyproject.toml
-3. Created stub files
-4. Read Core Implementation Guide
-5. Created docs/ markdown files for each phase
-6. Created this tracking file
+1. Implemented `pyviz/models.py` — all enums, core graph dataclasses, and phase-supporting dataclasses
+2. Wrote `tests/test_models.py` with 27 tests covering enums, dataclasses, defaults, list independence, JSON serialisation
+3. All 27 tests pass
+
+### Key decisions:
+- `RuntimeEdge` lives in `engine/tracer.py` (stretch phase; no other phase depends on it)
+- `Binding = Union[ResolvedBinding, UnresolvedBinding]` type alias lives in models.py
+- All enums subclass `str, Enum` — `.value` is already a plain string, JSON-safe without a custom encoder
 
 ### Blockers / Questions:
-- None yet
+- None
 
 ### Next Steps:
-When ready to implement, start with Phase 1 (models.py) in a new session.
-Paste the Phase 1 spec from docs/01_MODELS.md and this claude.md file as context.
+Phase 2 — `engine/discovery.py`. Context: `docs/02_DISCOVERY.md` + this file.
 
 ---
 
-**Last Updated:** [SETUP]
-**Last Verified:** [SETUP]
+**Last Updated:** Session 1
+**Last Verified:** Session 1 — `python -m pytest tests/test_models.py` → 27 passed
