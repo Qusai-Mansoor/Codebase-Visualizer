@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pyviz"
+version = "0.1.0"
+description = "A call/dependency graph visualizer for Python codebases"
+authors = [{name = "Your Name"}]
+requires-python = ">=3.9"
+
+dependencies = [
+    "jedi>=0.19",
+    "networkx>=3.2",
+    "typer>=0.12",
+    "rich>=13",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "gitpython>=3.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-snapshot>=0.9",
+]
+
+[project.scripts]
+pyviz = "pyviz.cli:app"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
