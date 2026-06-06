@@ -105,6 +105,7 @@ class DiscoveryResult:
     module_map: dict[str, Path]    # dotted_name -> absolute path to .py file
     package_map: dict[str, Path]   # dotted_name -> absolute path to package dir
     skipped: dict[Path, str]       # path -> reason string
+    stub_map: dict[str, Path] = field(default_factory=dict)  # dotted_name -> .pyi path
 
 
 # ---------------------------------------------------------------------------

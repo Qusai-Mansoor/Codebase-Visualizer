@@ -18,7 +18,7 @@ This file tracks which phases are complete and provides context for future Claud
 | Phase | Module | Status | Notes | Session |
 |-------|--------|--------|-------|---------|
 | 1 | models.py | ✅ Complete | All dataclasses + enums; 27 tests pass | 1 |
-| 2 | discovery.py | ⬜ PENDING | File discovery & module mapping | TBD |
+| 2 | discovery.py | ✅ Complete | SKIP_DIRS, src-layout, namespace pkgs, .pyi stubs; 25 tests pass | 2 |
 | 3 | parser.py | ⬜ PENDING | AST parsing with error handling | TBD |
 | 4 | resolver.py | ⬜ PENDING | Import resolution (jedi + manual) | TBD |
 | 5 | definitions.py | ⬜ PENDING | Definition extraction from AST | TBD |
@@ -92,27 +92,29 @@ All phases must handle:
 
 ## Current Session Notes
 
-**Session:** 1
+**Session:** 2
 **Assignee:** Claude Code (Sonnet 4.6)
-**Task:** Implement Phase 1 — models.py
+**Task:** Implement Phase 2 — engine/discovery.py
 
 ### What you did this session:
-1. Implemented `pyviz/models.py` — all enums, core graph dataclasses, and phase-supporting dataclasses
-2. Wrote `tests/test_models.py` with 27 tests covering enums, dataclasses, defaults, list independence, JSON serialisation
-3. All 27 tests pass
+1. Implemented `engine/discovery.py` — `discover(root)` with SKIP_DIRS, large-file guard, `__init__.py` package aliases, src-layout detection, namespace-package inference, `.pyi` stub collection
+2. Added `stub_map` field to `DiscoveryResult` in `models.py`
+3. Seeded `tests/fixtures/simple_pkg/` (`__init__.py` + `core.py`) and `tests/fixtures/namespace_pkg/` (`utils.py`, no `__init__.py`)
+4. Wrote `tests/test_discovery.py` with 25 tests; all pass
+5. Both test suites together: 52 passed
 
 ### Key decisions:
-- `RuntimeEdge` lives in `engine/tracer.py` (stretch phase; no other phase depends on it)
-- `Binding = Union[ResolvedBinding, UnresolvedBinding]` type alias lives in models.py
-- All enums subclass `str, Enum` — `.value` is already a plain string, JSON-safe without a custom encoder
+- Tests call `discover(FIXTURES)` (the fixtures parent) so package names appear as dotted prefixes — calling `discover(FIXTURES/simple_pkg)` would strip the package name from paths
+- `stub_map` added to `DiscoveryResult` now (referenced in Phase 4 import resolution)
+- `stat()` wrapped in `try/except OSError` as race-condition guard
 
 ### Blockers / Questions:
 - None
 
 ### Next Steps:
-Phase 2 — `engine/discovery.py`. Context: `docs/02_DISCOVERY.md` + this file.
+Phase 3 — `engine/parser.py`. Context: `docs/03_PARSING.md` + this file.
 
 ---
 
-**Last Updated:** Session 1
-**Last Verified:** Session 1 — `python -m pytest tests/test_models.py` → 27 passed
+**Last Updated:** Session 2
+**Last Verified:** Session 2 — `python -m pytest tests/test_models.py tests/test_discovery.py` → 52 passed
