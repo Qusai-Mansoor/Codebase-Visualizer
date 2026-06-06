@@ -23,7 +23,7 @@ This file tracks which phases are complete and provides context for future Claud
 | 4 | resolver.py | ✅ Complete | __init__ re-export chain, TYPE_CHECKING, cycles, wildcards/__all__, jedi fallback; 26 tests pass | 4 |
 | 5 | definitions.py | ✅ Complete | DefinitionExtractor visitor; CLASS/FUNCTION/METHOD/PROPERTY/LAMBDA nodes; INHERITS edges; dataclass synthetics; is_abstract/protocol/mixin/dataclass flags; 34 tests pass | 5 |
 | 6 | calls.py | ✅ Complete | CallEdgeExtractor visitor; CALLS edges; TYPE_CHECKING suppression; builtin skip; self/cls skip; cross-module binding resolution; dynamic_call warnings; 26 tests pass | 6 |
-| 7 | decorators.py | ⬜ PENDING | Decorator & dynamic dispatch | TBD |
+| 7 | decorators.py | ✅ Complete | DECORATES edges; role tagging (8 patterns); getattr dispatch warnings; local+import decorator resolution; __init__ canonical normalization; 23 tests pass | 7 |
 | 8 | graph.py | ⬜ PENDING | Graph assembly & analysis | TBD |
 | 9 | serializer.py | ⬜ PENDING | JSON serialization | TBD |
 | 10 | tracer.py | ⬜ PENDING | Runtime tracing (stretch) | TBD |
@@ -92,31 +92,30 @@ All phases must handle:
 
 ## Current Session Notes
 
-**Session:** 6
+**Session:** 7
 **Assignee:** Claude Code (Sonnet 4.6)
-**Task:** Implement Phase 6 — engine/calls.py
+**Task:** Implement Phase 7 — engine/decorators.py
 
 ### What you did this session:
-1. Implemented `engine/calls.py` — `_ModuleCallWalker` (scope tracker) + `CallEdgeExtractor(ast.NodeVisitor)` with `visit_Call`, `visit_If` (TYPE_CHECKING guard), `visit_With`, `visit_FunctionDef`=no-op (stops nested scope)
-2. Seeded fixtures: `call_graph_pkg/__init__.py`, `call_graph_pkg/utils.py`, `call_graph_pkg/app.py`
-3. Wrote `tests/test_calls.py` with 26 tests; all pass
-4. Full suite: 163 passed
+1. Added `role: Optional[str] = None` to `GraphNode` in `models.py`
+2. Implemented `engine/decorators.py` — DECORATES edges (import binding + local graph.nodes fallback), role tagging via `_classify_role` (8 framework patterns), `_GetAttrDetector(ast.NodeVisitor)` for dynamic dispatch warnings
+3. Seeded fixtures: `framework_roles/__init__.py`, `getattr_dispatch/__init__.py`
+4. Wrote `tests/test_decorators.py` with 23 tests; all pass
+5. Full suite: 186 passed
 
 ### Key decisions:
-- `_ModuleCallWalker` maintains `_class_stack` (like definitions.py) and calls `generic_visit` after spawning extractor — module walker finds nested defs, extractor stops at them
-- `self`/`cls` attribute calls → `(None, STATIC)` — no edge, no warning (not dynamic)
-- `super().method()` → `(None, STATIC)` — same
-- Builtins → `(None, STATIC)` — no edge, no warning
-- Dynamic unresolved → `(None, DYNAMIC)` → `AnalysisWarning(kind='dynamic_call', ...)`
-- `call_graph` test fixture uses `_run(FIXTURES)` not `_run(FIXTURES/call_graph_pkg)` — same pattern as Phases 4/5 to get correctly prefixed FQNs
+- Local decorator resolution: `resolver.bindings` only covers imports; for same-module decorators (no dots), fall back to checking `graph.nodes` with `f'{canonical}.{base_name}'`
+- `__init__` deduplication: `module_name.removesuffix('.__init__')` normalizes the canonical prefix so `pkg` and `pkg.__init__` both generate the same src FQN; then `any(e.kind == DECORATES and e.src == dec_fqn and e.dst == node_fqn for e in graph.edges)` prevents duplicate edges
+- Role classification strips call args before matching (handles `@pytest.fixture(scope='session')`)
+- getattr pattern: `Call(func=Call(func=Name('getattr'), ...), ...)` — outer call's func is itself a getattr call
 
 ### Blockers / Questions:
 - None
 
 ### Next Steps:
-Phase 7 — `engine/decorators.py`. Context: `docs/07_DECORATORS_DISPATCH.md` + this file.
+Phase 8 — `engine/graph.py`. Context: `docs/08_GRAPH_ASSEMBLY.md` + this file.
 
 ---
 
-**Last Updated:** Session 6
-**Last Verified:** Session 6 — `python -m pytest tests/test_models.py tests/test_discovery.py tests/test_parser.py tests/test_resolver.py tests/test_definitions.py tests/test_calls.py` → 163 passed
+**Last Updated:** Session 7
+**Last Verified:** Session 7 — `python -m pytest tests/test_models.py tests/test_discovery.py tests/test_parser.py tests/test_resolver.py tests/test_definitions.py tests/test_calls.py tests/test_decorators.py` → 186 passed
