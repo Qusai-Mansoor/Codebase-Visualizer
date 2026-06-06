@@ -26,7 +26,7 @@ This file tracks which phases are complete and provides context for future Claud
 | 7 | decorators.py | ✅ Complete | DECORATES edges; role tagging (8 patterns); getattr dispatch warnings; local+import decorator resolution; __init__ canonical normalization; 23 tests pass | 7 |
 | 8 | graph.py | ✅ Complete | build_nx_graph; find_cycles (nx.simple_cycles + dedup); _find_unused_symbols (dunders/exports/roots excluded); _detect_communities (Louvain); 22 tests pass | 8 |
 | 9 | serializer.py | ✅ Complete | serialize(pg, nx_graph, communities, unused, cycles, root) → JSON str; dangling edge filter; enum .value; null community/role; ISO timestamp; 24 tests pass | 9 |
-| 10 | tracer.py | ⬜ PENDING | Runtime tracing (stretch) | TBD |
+| 10 | tracer.py | ✅ Complete | RuntimeTracer(sys.settrace); cross-file call recording; merge_into_graph (STATIC→BOTH, new RUNTIME edges); trace_test_suite entry point; stable bound-method cache; 21 tests pass | 10 |
 | - | CLI | ⬜ PENDING | Typer CLI wrapper | TBD |
 | - | API | ⬜ PENDING | FastAPI service | TBD |
 
@@ -92,30 +92,29 @@ All phases must handle:
 
 ## Current Session Notes
 
-**Session:** 9
+**Session:** 10
 **Assignee:** Claude Code (Sonnet 4.6)
-**Task:** Implement Phase 9 — engine/serializer.py
+**Task:** Implement Phase 10 — engine/tracer.py
 
 ### What you did this session:
-1. Implemented `engine/serializer.py` — `serialize(pg, nx_graph, communities, unused, cycles, root) -> str`
-2. Wrote `tests/test_serializer.py` with 24 tests; all pass
-3. Full suite: 232 passed
+1. Implemented `engine/tracer.py` — `RuntimeEdge` dataclass, `RuntimeTracer` class (`_trace`, `start`, `stop`, `merge_into_graph`), `trace_test_suite` entry point
+2. Wrote `tests/test_tracer.py` with 21 tests; all pass
+3. Full suite: 254 passed
 
 ### Key decisions:
-- `nx_graph` parameter accepted but not used in the body (community/unused/cycles come from `GraphAssemblyResult`; kept for API symmetry with the spec signature)
-- Dangling edge filter: `if e.src in pg.nodes and e.dst in pg.nodes` before emitting edges
-- `datetime.datetime.now(datetime.UTC).isoformat()` used instead of deprecated `utcnow()` — same ISO format
-- `community` field: `communities.get(nid)` → `None` (JSON `null`) when not clustered
-- `role` field: `n.role` directly (set by Phase 7, `None` for plain functions)
+- Stable bound-method cache: `self._trace = self._trace` in `__init__` — Python creates a new bound method each access; caching once gives a stable object for `sys.settrace`, `threading.settrace`, and `is` identity checks in tests
+- Cross-file only: same `co_filename` → skip (intra-module calls don't add value; they're already captured statically)
+- `merge_into_graph`: inverts `discovery.module_map` (dotted_name → Path) to build `str(path) → dotted_name` lookup; upgrades existing static CALLS edges to BOTH in-place; new RUNTIME edges appended
+- `trace_test_suite` catches `SystemExit` from `pytest.main`; `stop()`/merge always run via `finally`
 
 ### Blockers / Questions:
 - None
 
 ### Next Steps:
-Phase 10 — `engine/tracer.py` (runtime tracing, stretch goal). Context: `docs/10_RUNTIME_TRACING.md` + this file.
 CLI — `cli.py` (Typer wrapper). Context: `docs/INTEGRATION_PLAN.md` + this file.
+API — `api.py` (FastAPI service).
 
 ---
 
-**Last Updated:** Session 9
-**Last Verified:** Session 9 — `python -m pytest tests/test_models.py tests/test_discovery.py tests/test_parser.py tests/test_resolver.py tests/test_definitions.py tests/test_calls.py tests/test_decorators.py tests/test_graph.py tests/test_serializer.py` → 232 passed
+**Last Updated:** Session 10
+**Last Verified:** Session 10 — `python -m pytest tests/` → 254 passed
