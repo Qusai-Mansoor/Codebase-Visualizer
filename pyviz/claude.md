@@ -48,15 +48,15 @@ All phases must handle:
 - [ ] Circular imports (detect with visited set, break cycles)
 - [ ] Namespace packages (no __init__.py)
 - [ ] Stub files (.pyi) — collect separately
-- [ ] Entry points in pyproject.toml — treat as roots
-- [ ] __main__.py — always a root
-- [ ] Test files (tests/*.py) — functions are roots
-- [ ] Dunder methods (__init__, __call__, etc.) — never mark as unused
-- [ ] dataclass-generated methods — synthetic nodes
-- [ ] Properties (@property) — attribute access calls getter
-- [ ] importlib.import_module() — dynamic import warning
-- [ ] Version-gated imports (if sys.version_info >= ...) — track both branches
-- [ ] Large file handling (>2MB) — skip gracefully
+- [x] Entry points in pyproject.toml — treat as roots (Session 11: discovery._parse_entry_points + graph._build_roots_set)
+- [x] __main__.py — always a root (Phase 8)
+- [x] Test files (tests/*.py) — functions are roots (Phase 8)
+- [x] Dunder methods (__init__, __call__, etc.) — never mark as unused (Phase 8)
+- [x] dataclass-generated methods — synthetic nodes (Phase 5)
+- [ ] Properties (@property) — attribute access calls getter (optional per spec §12.7)
+- [x] importlib.import_module() — dynamic import warning (Session 11: calls._is_importlib_call)
+- [x] Version-gated imports (if sys.version_info >= ...) — track both branches, is_conditional=True (Session 11: resolver._get_version_gated_ranges)
+- [x] Large file handling (>2MB) — skip gracefully (Phase 2)
 
 ### Library Usage Rules
 - **jedi** — used ONLY for import resolution. Never ask jedi "what does this file import?"
@@ -92,20 +92,24 @@ All phases must handle:
 
 ## Current Session Notes
 
-**Session:** 10
+**Session:** 11
 **Assignee:** Claude Code (Sonnet 4.6)
-**Task:** Implement Phase 10 — engine/tracer.py
+**Task:** Implement Phase 11 — cross-cutting implicit requirements
 
 ### What you did this session:
-1. Implemented `engine/tracer.py` — `RuntimeEdge` dataclass, `RuntimeTracer` class (`_trace`, `start`, `stop`, `merge_into_graph`), `trace_test_suite` entry point
-2. Wrote `tests/test_tracer.py` with 21 tests; all pass
-3. Full suite: 254 passed
+1. `models.py` — added `ResolvedBinding.is_conditional` and `DiscoveryResult.entry_points`
+2. `discovery.py` — added `_parse_entry_points()` (pyproject.toml `[project.scripts]` + `[tool.poetry.scripts]`)
+3. `graph.py` — `assemble(pg, discovery=None)` + `_build_roots_set` adds entry-point FQNs to roots
+4. `calls.py` — `_is_importlib_call` + `_emit_dynamic_import_warning` for §12.8
+5. `resolver.py` — `_get_version_gated_ranges()` + threaded `is_conditional` through `_process_import` → `_record_binding` for §12.9
+6. Wrote `tests/test_implicit.py` with 14 tests; all pass
+7. Full suite: 268 passed
 
 ### Key decisions:
-- Stable bound-method cache: `self._trace = self._trace` in `__init__` — Python creates a new bound method each access; caching once gives a stable object for `sys.settrace`, `threading.settrace`, and `is` identity checks in tests
-- Cross-file only: same `co_filename` → skip (intra-module calls don't add value; they're already captured statically)
-- `merge_into_graph`: inverts `discovery.module_map` (dotted_name → Path) to build `str(path) → dotted_name` lookup; upgrades existing static CALLS edges to BOTH in-place; new RUNTIME edges appended
-- `trace_test_suite` catches `SystemExit` from `pytest.main`; `stop()`/merge always run via `finally`
+- `assemble()` accepts optional `discovery` parameter; existing call sites pass nothing → no breakage
+- pyproject.toml uses stdlib `tomllib` (Python 3.11+) with `tomli` fallback; any parse error returns `{}`
+- `importlib.import_module` check runs before normal `_resolve_call_target` and returns early; prevents spurious `dynamic_call` warning for the same node
+- Version-gated imports: ranges cover both `if` body and `else` body (via `ast.walk(node)`); `is_conditional=True` does NOT set `is_type_only`
 
 ### Blockers / Questions:
 - None
@@ -116,5 +120,5 @@ API — `api.py` (FastAPI service).
 
 ---
 
-**Last Updated:** Session 10
-**Last Verified:** Session 10 — `python -m pytest tests/` → 254 passed
+**Last Updated:** Session 11
+**Last Verified:** Session 11 — `python -m pytest tests/` → 268 passed

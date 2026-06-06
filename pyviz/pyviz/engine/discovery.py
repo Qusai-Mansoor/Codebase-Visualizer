@@ -47,12 +47,15 @@ def discover(root: Path) -> DiscoveryResult:
     _collect_pyi_files(scan_base, scan_base, stub_map, skipped)
     _infer_namespace_packages(module_map, package_map, scan_base)
 
+    entry_points = _parse_entry_points(root)
+
     return DiscoveryResult(
         root=root,
         module_map=module_map,
         package_map=package_map,
         skipped=skipped,
         stub_map=stub_map,
+        entry_points=entry_points,
     )
 
 
@@ -132,6 +135,36 @@ def _collect_pyi_files(
         parts[-1] = parts[-1][:-4]  # strip .pyi
         dotted = '.'.join(parts)
         stub_map[dotted] = pyi_file
+
+
+def _parse_entry_points(root: Path) -> dict[str, str]:
+    """Parse pyproject.toml for [project.scripts] and [tool.poetry.scripts] entries.
+
+    Converts 'pkg.mod:fn' → 'pkg.mod.fn' (the callable FQN).
+    Returns {} if pyproject.toml is absent, unreadable, or has no scripts section.
+    """
+    pyproject = root / 'pyproject.toml'
+    if not pyproject.is_file():
+        return {}
+    try:
+        try:
+            import tomllib          # stdlib on Python 3.11+
+        except ImportError:
+            import tomli as tomllib  # type: ignore[no-redef]
+        with open(pyproject, 'rb') as f:
+            data = tomllib.load(f)
+    except Exception:
+        return {}
+    result: dict[str, str] = {}
+    for section in (
+        data.get('project', {}).get('scripts', {}),
+        data.get('tool', {}).get('poetry', {}).get('scripts', {}),
+    ):
+        for name, ref in section.items():
+            if isinstance(ref, str) and ':' in ref:
+                mod, fn = ref.split(':', 1)
+                result[name] = f'{mod}.{fn}'
+    return result
 
 
 def _infer_namespace_packages(

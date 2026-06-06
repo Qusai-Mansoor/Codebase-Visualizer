@@ -61,14 +61,16 @@ def _resolve_module_imports(
     warnings: list,
 ) -> None:
     tc_ranges = _get_type_checking_ranges(parsed_mod.tree)
+    vg_ranges = _get_version_gated_ranges(parsed_mod.tree)
 
     for node in ast.walk(parsed_mod.tree):
         if not isinstance(node, (ast.Import, ast.ImportFrom)):
             continue
         lineno = getattr(node, 'lineno', 0)
         is_type_only = any(start <= lineno <= end for start, end in tc_ranges)
+        is_conditional = any(start <= lineno <= end for start, end in vg_ranges)
         _process_import(
-            node, module_name, is_type_only,
+            node, module_name, is_type_only, is_conditional,
             parsed_mod, discovery, parse_result,
             jedi_project, bindings, warnings,
         )
@@ -78,6 +80,7 @@ def _process_import(
     node: ast.stmt,
     module_name: str,
     is_type_only: bool,
+    is_conditional: bool,
     parsed_mod: ParsedModule,
     discovery: DiscoveryResult,
     parse_result: ParseResult,
@@ -91,7 +94,7 @@ def _process_import(
             src_module = alias.name
             key = (module_name, local_name)
             binding = _record_binding(
-                src_module, alias.name, is_type_only, False,
+                src_module, alias.name, is_type_only, is_conditional, False,
                 parse_result, discovery, jedi_project,
                 parsed_mod, node, warnings, module_name,
             )
@@ -115,7 +118,7 @@ def _process_import(
             local_name = alias.asname if alias.asname else alias.name
             key = (module_name, local_name)
             binding = _record_binding(
-                src_module, alias.name, is_type_only, False,
+                src_module, alias.name, is_type_only, is_conditional, False,
                 parse_result, discovery, jedi_project,
                 parsed_mod, node, warnings, module_name,
             )
@@ -126,6 +129,7 @@ def _record_binding(
     src_module: str,
     import_name: str,
     is_type_only: bool,
+    is_conditional: bool,
     is_wildcard: bool,
     parse_result: ParseResult,
     discovery: DiscoveryResult,
@@ -156,6 +160,7 @@ def _record_binding(
             ))
     elif isinstance(result, ResolvedBinding):
         result.is_type_only = is_type_only
+        result.is_conditional = is_conditional
         result.is_wildcard = is_wildcard
 
     return result
@@ -321,6 +326,29 @@ def _is_type_checking_test(test: ast.expr) -> bool:
     if isinstance(test, ast.Attribute) and test.attr == 'TYPE_CHECKING':
         return True
     return False
+
+
+def _get_version_gated_ranges(tree: ast.Module) -> list[tuple[int, int]]:
+    """Return (start_line, end_line) pairs for if sys.version_info ... blocks (both branches)."""
+    ranges: list[tuple[int, int]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.If):
+            continue
+        test = node.test
+        if isinstance(test, ast.Compare) and isinstance(test.left, ast.Attribute):
+            attr = test.left
+            if (
+                attr.attr == 'version_info'
+                and isinstance(attr.value, ast.Name)
+                and attr.value.id == 'sys'
+            ):
+                start = node.lineno
+                end = max(
+                    (getattr(n, 'end_lineno', getattr(n, 'lineno', start)) for n in ast.walk(node)),
+                    default=start,
+                )
+                ranges.append((start, end))
+    return ranges
 
 
 # ---------------------------------------------------------------------------

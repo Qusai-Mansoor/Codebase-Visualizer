@@ -9,11 +9,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterator, Optional
 
 import networkx as nx
 
-from pyviz.models import ProjectGraph
+from pyviz.models import DiscoveryResult, ProjectGraph
 
 # ---------------------------------------------------------------------------
 # Output type (networkx stays out of models.py)
@@ -31,11 +31,14 @@ class GraphAssemblyResult:
 # Public API
 # ---------------------------------------------------------------------------
 
-def assemble(pg: ProjectGraph) -> GraphAssemblyResult:
+def assemble(
+    pg: ProjectGraph,
+    discovery: Optional[DiscoveryResult] = None,
+) -> GraphAssemblyResult:
     """Build the networkx graph and run all post-processing analyses."""
     G = build_nx_graph(pg)
     cycles = find_cycles(G)
-    unused = list(_find_unused_symbols(G, pg))
+    unused = list(_find_unused_symbols(G, pg, discovery))
     communities = _detect_communities(G)
     return GraphAssemblyResult(graph=G, cycles=cycles, unused=unused, communities=communities)
 
@@ -93,14 +96,18 @@ _CALLABLE_KINDS: frozenset[str] = frozenset(
 )
 
 
-def _find_unused_symbols(G: nx.DiGraph, pg: ProjectGraph) -> Iterator[str]:
+def _find_unused_symbols(
+    G: nx.DiGraph,
+    pg: ProjectGraph,
+    discovery: Optional[DiscoveryResult] = None,
+) -> Iterator[str]:
     """Yield FQNs of callable nodes that have no incoming call/inherit/decorate edges."""
     exported: set[str] = set()
     for nid, n in pg.nodes.items():
         for name in n.all_exports:
             exported.add(f'{nid}.{name}')
 
-    roots = _build_roots_set(pg)
+    roots = _build_roots_set(pg, discovery)
 
     for nid, data in G.nodes(data=True):
         if data.get('kind') not in _CALLABLE_KINDS:
@@ -120,7 +127,10 @@ def _find_unused_symbols(G: nx.DiGraph, pg: ProjectGraph) -> Iterator[str]:
             yield nid
 
 
-def _build_roots_set(pg: ProjectGraph) -> set[str]:
+def _build_roots_set(
+    pg: ProjectGraph,
+    discovery: Optional[DiscoveryResult] = None,
+) -> set[str]:
     """Return node FQNs that are unconditionally alive (tests, __main__, entry points)."""
     roots: set[str] = set()
     for nid, node in pg.nodes.items():
@@ -129,6 +139,10 @@ def _build_roots_set(pg: ProjectGraph) -> set[str]:
         fname = Path(node.file).name
         if fname.startswith('test_') or fname.endswith('_test.py') or fname == '__main__.py':
             roots.add(nid)
+    # pyproject.toml [project.scripts] entry points are invoked by the OS
+    if discovery is not None:
+        for ep_fqn in discovery.entry_points.values():
+            roots.add(ep_fqn)
     return roots
 
 

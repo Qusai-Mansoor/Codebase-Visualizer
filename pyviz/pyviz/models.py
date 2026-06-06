@@ -107,7 +107,8 @@ class DiscoveryResult:
     module_map: dict[str, Path]    # dotted_name -> absolute path to .py file
     package_map: dict[str, Path]   # dotted_name -> absolute path to package dir
     skipped: dict[Path, str]       # path -> reason string
-    stub_map: dict[str, Path] = field(default_factory=dict)  # dotted_name -> .pyi path
+    stub_map: dict[str, Path] = field(default_factory=dict)        # dotted_name -> .pyi path
+    entry_points: dict[str, str] = field(default_factory=dict)    # cli_name -> callable FQN
 
 
 # ---------------------------------------------------------------------------
@@ -140,8 +141,9 @@ class ResolvedBinding:
     real_file: Path
     real_line: int
     real_fqn: str        # fully-qualified name: 'mypkg.core.MyClass'
-    is_type_only: bool = False   # came from inside TYPE_CHECKING block
-    is_wildcard: bool = False    # came from 'from x import *'
+    is_type_only: bool = False      # came from inside TYPE_CHECKING block
+    is_wildcard: bool = False       # came from 'from x import *'
+    is_conditional: bool = False    # came from inside sys.version_info branch
 
 
 @dataclass

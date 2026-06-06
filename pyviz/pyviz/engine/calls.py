@@ -152,8 +152,12 @@ class CallEdgeExtractor(ast.NodeVisitor):
     # ------------------------------------------------------------------
 
     def _emit_call(self, node: ast.Call) -> None:
-        target, confidence = self._resolve_call_target(node.func)
         line = getattr(node, 'lineno', None)
+        # §12.8 — importlib.import_module is a special dynamic-import pattern
+        if self._is_importlib_call(node):
+            self._emit_dynamic_import_warning(node, line)
+            return  # do not also emit a dynamic_call warning
+        target, confidence = self._resolve_call_target(node.func)
         if target is not None:
             self.graph.edges.append(GraphEdge(
                 src=self.caller_fqn,
@@ -170,6 +174,37 @@ class CallEdgeExtractor(ast.NodeVisitor):
                 file=self.rel_file,
                 line=line,
             ))
+
+    def _is_importlib_call(self, node: ast.Call) -> bool:
+        func = node.func
+        if (
+            isinstance(func, ast.Attribute)
+            and func.attr == 'import_module'
+            and isinstance(func.value, ast.Name)
+            and func.value.id == 'importlib'
+        ):
+            return True
+        if isinstance(func, ast.Name) and func.id == 'import_module':
+            b = self.resolver.bindings.get((self.module.module_name, 'import_module'))
+            if isinstance(b, ResolvedBinding) and 'importlib' in b.real_fqn:
+                return True
+        return False
+
+    def _emit_dynamic_import_warning(self, node: ast.Call, line) -> None:
+        if (
+            node.args
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+        ):
+            mod_ref = node.args[0].value
+        else:
+            mod_ref = 'dynamic string, cannot resolve'
+        self.graph.warnings.append(AnalysisWarning(
+            kind='dynamic_import',
+            message=f'{self.caller_fqn}: importlib.import_module({mod_ref!r})',
+            file=self.rel_file,
+            line=line,
+        ))
 
     def _emit_enter_edge(self, ctx_expr: ast.expr) -> None:
         """Emit a CALLS edge to __enter__ when the context manager type resolves."""
