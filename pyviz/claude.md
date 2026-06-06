@@ -27,6 +27,7 @@ This file tracks which phases are complete and provides context for future Claud
 | 8 | graph.py | ✅ Complete | build_nx_graph; find_cycles (nx.simple_cycles + dedup); _find_unused_symbols (dunders/exports/roots excluded); _detect_communities (Louvain); 22 tests pass | 8 |
 | 9 | serializer.py | ✅ Complete | serialize(pg, nx_graph, communities, unused, cycles, root) → JSON str; dangling edge filter; enum .value; null community/role; ISO timestamp; 24 tests pass | 9 |
 | 10 | tracer.py | ✅ Complete | RuntimeTracer(sys.settrace); cross-file call recording; merge_into_graph (STATIC→BOTH, new RUNTIME edges); trace_test_suite entry point; stable bound-method cache; 21 tests pass | 10 |
+| 12 | test_integration.py | ✅ Complete | Full pipeline on fixtures; re-export/cycle/decorator/flag/wildcard assertions; snapshot regression; 17 tests pass | 12 |
 | - | CLI | ⬜ PENDING | Typer CLI wrapper | TBD |
 | - | API | ⬜ PENDING | FastAPI service | TBD |
 
@@ -92,24 +93,22 @@ All phases must handle:
 
 ## Current Session Notes
 
-**Session:** 11
+**Session:** 12
 **Assignee:** Claude Code (Sonnet 4.6)
-**Task:** Implement Phase 11 — cross-cutting implicit requirements
+**Task:** Implement Phase 12 — Testing Strategy
 
 ### What you did this session:
-1. `models.py` — added `ResolvedBinding.is_conditional` and `DiscoveryResult.entry_points`
-2. `discovery.py` — added `_parse_entry_points()` (pyproject.toml `[project.scripts]` + `[tool.poetry.scripts]`)
-3. `graph.py` — `assemble(pg, discovery=None)` + `_build_roots_set` adds entry-point FQNs to roots
-4. `calls.py` — `_is_importlib_call` + `_emit_dynamic_import_warning` for §12.8
-5. `resolver.py` — `_get_version_gated_ranges()` + threaded `is_conditional` through `_process_import` → `_record_binding` for §12.9
-6. Wrote `tests/test_implicit.py` with 14 tests; all pass
-7. Full suite: 268 passed
+1. Created `tests/fixtures/wildcard_all/` (3 files) — tests wildcard import limited by `__all__`
+2. Rewrote `tests/test_integration.py` with 17 tests (was a stub with 1 passing test)
+3. Used session-scoped pytest fixtures to run FIXTURES pipeline once per session (fast)
+4. Verified snapshot at `tests/__snapshots__/simple_pkg_snapshot.json`; community IDs normalized (Louvain non-deterministic)
+5. Full suite: 284 passed
 
 ### Key decisions:
-- `assemble()` accepts optional `discovery` parameter; existing call sites pass nothing → no breakage
-- pyproject.toml uses stdlib `tomllib` (Python 3.11+) with `tomli` fallback; any parse error returns `{}`
-- `importlib.import_module` check runs before normal `_resolve_call_target` and returns early; prevents spurious `dynamic_call` warning for the same node
-- Version-gated imports: ranges cover both `if` body and `else` body (via `ast.walk(node)`); `is_conditional=True` does NOT set `is_type_only`
+- Tests discover from `FIXTURES` (not individual package dirs) to get proper dotted module names (`simple_pkg.core.add` not `core.add`)
+- Cycle tests use `mutual_calls/` fixture (ping/pong mutual recursion) not `circular_import_a/b/` (those only have import cycles, not call cycles)
+- FastAPI ground-truth test skipped: discovering from `fastapi/` gives short module names (`__init__`, `routing`) not fully-qualified ones; would need site-packages as root which is impractical
+- Snapshot normalization: `community` → `null` (Louvain IDs non-deterministic), `circular_imports`/`unused_symbols`/`warnings` → `[]` (from full fixtures run, not simple_pkg-specific)
 
 ### Blockers / Questions:
 - None
@@ -120,5 +119,5 @@ API — `api.py` (FastAPI service).
 
 ---
 
-**Last Updated:** Session 11
-**Last Verified:** Session 11 — `python -m pytest tests/` → 268 passed
+**Last Updated:** Session 12
+**Last Verified:** Session 12 — `python -m pytest tests/` → 284 passed
