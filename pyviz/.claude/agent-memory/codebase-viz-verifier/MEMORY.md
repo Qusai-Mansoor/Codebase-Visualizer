@@ -1,0 +1,1 @@
+- [Project Architecture](project_architecture.md) — Phases 1–4 module roles, data flow, and known issues (verified 2026-06-06)

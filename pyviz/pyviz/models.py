@@ -60,6 +60,7 @@ class GraphNode:
     is_protocol: bool = False
     is_dataclass: bool = False
     is_mixin: bool = False
+    is_synthetic: bool = False
     bases: list[str] = field(default_factory=list)       # FQNs of parent classes
     decorators: list[str] = field(default_factory=list)  # decorator names (raw text)
     all_exports: list[str] = field(default_factory=list) # module __all__ contents

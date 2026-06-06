@@ -21,8 +21,8 @@ This file tracks which phases are complete and provides context for future Claud
 | 2 | discovery.py | ✅ Complete | SKIP_DIRS, src-layout, namespace pkgs, .pyi stubs; 25 tests pass | 2 |
 | 3 | parser.py | ✅ Complete | UTF-8/latin-1 fallback, SyntaxError → failed, empty files OK; 25 tests pass | 3 |
 | 4 | resolver.py | ✅ Complete | __init__ re-export chain, TYPE_CHECKING, cycles, wildcards/__all__, jedi fallback; 26 tests pass | 4 |
-| 5 | definitions.py | ⬜ PENDING | Definition extraction from AST | TBD |
-| 6 | calls.py | ⬜ PENDING | Call edge extraction | TBD |
+| 5 | definitions.py | ✅ Complete | DefinitionExtractor visitor; CLASS/FUNCTION/METHOD/PROPERTY/LAMBDA nodes; INHERITS edges; dataclass synthetics; is_abstract/protocol/mixin/dataclass flags; 34 tests pass | 5 |
+| 6 | calls.py | ✅ Complete | CallEdgeExtractor visitor; CALLS edges; TYPE_CHECKING suppression; builtin skip; self/cls skip; cross-module binding resolution; dynamic_call warnings; 26 tests pass | 6 |
 | 7 | decorators.py | ⬜ PENDING | Decorator & dynamic dispatch | TBD |
 | 8 | graph.py | ⬜ PENDING | Graph assembly & analysis | TBD |
 | 9 | serializer.py | ⬜ PENDING | JSON serialization | TBD |
@@ -92,30 +92,31 @@ All phases must handle:
 
 ## Current Session Notes
 
-**Session:** 4
+**Session:** 6
 **Assignee:** Claude Code (Sonnet 4.6)
-**Task:** Implement Phase 4 — engine/resolver.py
+**Task:** Implement Phase 6 — engine/calls.py
 
 ### What you did this session:
-1. Implemented `engine/resolver.py` — `resolve_all(discovery, parse_result)` with Strategy B (manual AST chain-follower) as primary for internal modules, jedi as optional fallback for external
-2. KEY BUG FIXED: `_resolve_relative` needed `is_package` param — without it, `from .core import Thing` in `reexport_pkg/__init__.py` (module_name = `'reexport_pkg'`, a single part) would `parts[:-1]` to `[]`, losing the package prefix entirely. Fix: when `is_package=True`, use `parts[:]` as anchor instead of `parts[:-1]`
-3. Seeded fixtures: `reexport_pkg/`, `circular_import_a/`, `circular_import_b/`, `type_checking_only/`, `allexport_pkg/`
-4. Wrote `tests/test_resolver.py` with 26 tests; all pass
-5. Full suite: 103 passed (27 models + 25 discovery + 25 parser + 26 resolver)
+1. Implemented `engine/calls.py` — `_ModuleCallWalker` (scope tracker) + `CallEdgeExtractor(ast.NodeVisitor)` with `visit_Call`, `visit_If` (TYPE_CHECKING guard), `visit_With`, `visit_FunctionDef`=no-op (stops nested scope)
+2. Seeded fixtures: `call_graph_pkg/__init__.py`, `call_graph_pkg/utils.py`, `call_graph_pkg/app.py`
+3. Wrote `tests/test_calls.py` with 26 tests; all pass
+4. Full suite: 163 passed
 
 ### Key decisions:
-- `is_package` boolean passed to `_resolve_relative` — checked via `module_name in discovery.package_map`
-- TYPE_CHECKING test uses internal import (so binding is `ResolvedBinding` with `is_type_only`) — external imports produce `UnresolvedBinding` which doesn't have `is_type_only`
-- jedi used only when source module is NOT in `module_map` (external imports); for internal first-party code, Strategy B is more reliable
-- Wildcard `from x import *` resolves only names in `__all__`; without `__all__`, all public (non-`_`) top-level names
+- `_ModuleCallWalker` maintains `_class_stack` (like definitions.py) and calls `generic_visit` after spawning extractor — module walker finds nested defs, extractor stops at them
+- `self`/`cls` attribute calls → `(None, STATIC)` — no edge, no warning (not dynamic)
+- `super().method()` → `(None, STATIC)` — same
+- Builtins → `(None, STATIC)` — no edge, no warning
+- Dynamic unresolved → `(None, DYNAMIC)` → `AnalysisWarning(kind='dynamic_call', ...)`
+- `call_graph` test fixture uses `_run(FIXTURES)` not `_run(FIXTURES/call_graph_pkg)` — same pattern as Phases 4/5 to get correctly prefixed FQNs
 
 ### Blockers / Questions:
 - None
 
 ### Next Steps:
-Phase 5 — `engine/definitions.py`. Context: `docs/05_DEFINITIONS.md` + this file.
+Phase 7 — `engine/decorators.py`. Context: `docs/07_DECORATORS_DISPATCH.md` + this file.
 
 ---
 
-**Last Updated:** Session 4
-**Last Verified:** Session 4 — `python -m pytest tests/test_models.py tests/test_discovery.py tests/test_parser.py tests/test_resolver.py` → 103 passed
+**Last Updated:** Session 6
+**Last Verified:** Session 6 — `python -m pytest tests/test_models.py tests/test_discovery.py tests/test_parser.py tests/test_resolver.py tests/test_definitions.py tests/test_calls.py` → 163 passed
