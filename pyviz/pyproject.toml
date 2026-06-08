@@ -28,6 +28,12 @@ dev = [
 [project.scripts]
 pyviz = "pyviz.cli:app"
 
+[tool.hatch.build.targets.wheel]
+packages = ["pyviz"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"pyviz/viewer.html" = "pyviz/viewer.html"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]

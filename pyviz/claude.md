@@ -28,8 +28,9 @@ This file tracks which phases are complete and provides context for future Claud
 | 9 | serializer.py | ✅ Complete | serialize(pg, nx_graph, communities, unused, cycles, root) → JSON str; dangling edge filter; enum .value; null community/role; ISO timestamp; 24 tests pass | 9 |
 | 10 | tracer.py | ✅ Complete | RuntimeTracer(sys.settrace); cross-file call recording; merge_into_graph (STATIC→BOTH, new RUNTIME edges); trace_test_suite entry point; stable bound-method cache; 21 tests pass | 10 |
 | 12 | test_integration.py | ✅ Complete | Full pipeline on fixtures; re-export/cycle/decorator/flag/wildcard assertions; snapshot regression; 17 tests pass | 12 |
-| - | CLI | ⬜ PENDING | Typer CLI wrapper | TBD |
-| - | API | ⬜ PENDING | FastAPI service | TBD |
+| 13 | cli.py + viewer.html | ✅ Complete | Typer CLI (analyze/serve/version); reconciled pipeline; --trace/--quiet/--compact; bundled Cytoscape viewer (SRI-pinned); 11 tests pass | 13 |
+| - | API | ⬜ PENDING | FastAPI service (Phase 14) | TBD |
+| - | Frontend | ⬜ PENDING | Next.js + React Flow (Phases 15-16) | TBD |
 
 **Legend:** ⬜ = Pending, 🟨 = In Progress, ✅ = Complete, ❌ = Blocked
 
@@ -93,31 +94,42 @@ All phases must handle:
 
 ## Current Session Notes
 
-**Session:** 12
-**Assignee:** Claude Code (Sonnet 4.6)
-**Task:** Implement Phase 12 — Testing Strategy
+**Session:** 13
+**Assignee:** Claude Code (Opus 4.8)
+**Task:** Implement Phase 13 — CLI + bundled viewer (Part 2 §1 of CLI_and_Web_Interface_Guide.docx)
 
 ### What you did this session:
-1. Created `tests/fixtures/wildcard_all/` (3 files) — tests wildcard import limited by `__all__`
-2. Rewrote `tests/test_integration.py` with 17 tests (was a stub with 1 passing test)
-3. Used session-scoped pytest fixtures to run FIXTURES pipeline once per session (fast)
-4. Verified snapshot at `tests/__snapshots__/simple_pkg_snapshot.json`; community IDs normalized (Louvain non-deterministic)
-5. Full suite: 284 passed
+1. `pyviz/cli.py` — Typer CLI: `analyze` (path/--url/--output/--trace/--quiet/--compact), `serve`, `version`
+2. `pyviz/viewer.html` — single-file Cytoscape.js + dagre viewer; `__GRAPH_DATA__` placeholder injected at serve time; SRI hashes pinned on all 3 CDN scripts
+3. `pyproject.toml` — added `[tool.hatch.build.targets.wheel]` + force-include for `viewer.html`
+4. `tests/test_cli.py` — 12 CliRunner tests (no network), incl. an XSS-breakout regression test
+5. Security fix: `_render_viewer` escapes `</` → `<\/` and U+2028/U+2029 before injecting the
+   (untrusted) graph JSON into the viewer `<script>` — prevents stored XSS from a malicious analyzed repo
+6. Full suite: 296 passed
+
+### ⚠️ CRITICAL — Part 2 guide API mismatch (applies to Phase 14 API too):
+The guide's sample code targets an IDEALIZED engine API. Real signatures:
+- `definitions.extract_all(parsed, resolved, g, disc)` — needs `discovery` (guide omits it)
+- `calls.extract_all(parsed, resolved, g, disc)` — needs `discovery`
+- `decorators.extract_all(parsed, resolved, g, disc)` — guide calls it `process_all` (WRONG)
+- `ar = graph_mod.assemble(g, disc)` → returns `GraphAssemblyResult(graph, cycles, unused, communities)`; does NOT mutate in place
+- `serializer.serialize(pg, ar.graph, ar.communities, ar.unused, ar.cycles, root)` — 6 args (guide shows 2)
+- `tracer.trace_test_suite(root, disc, g)` — ✅ matches guide
 
 ### Key decisions:
-- Tests discover from `FIXTURES` (not individual package dirs) to get proper dotted module names (`simple_pkg.core.add` not `core.add`)
-- Cycle tests use `mutual_calls/` fixture (ping/pong mutual recursion) not `circular_import_a/b/` (those only have import cycles, not call cycles)
-- FastAPI ground-truth test skipped: discovering from `fastapi/` gives short module names (`__init__`, `routing`) not fully-qualified ones; would need site-packages as root which is impractical
-- Snapshot normalization: `community` → `null` (Louvain IDs non-deterministic), `circular_imports`/`unused_symbols`/`warnings` → `[]` (from full fixtures run, not simple_pkg-specific)
+- `--compact` re-dumps via `json.dumps(json.loads(serialize(...)), separators=(',',':'))` — engine untouched (serialize always indents)
+- `--trace` re-runs `assemble` after the tracer so runtime edges are included
+- CLI tests assert `core.add` (not `simple_pkg.core.add`): analyzing a package dir directly roots there
+- Bundled viewer factored `_render_viewer()` out so injection is unit-testable without binding a socket
 
 ### Blockers / Questions:
 - None
 
-### Next Steps:
-CLI — `cli.py` (Typer wrapper). Context: `docs/INTEGRATION_PLAN.md` + this file.
-API — `api.py` (FastAPI service).
+### Next Steps (one phase at a time, per user):
+Phase 14 — API: `pyviz/api.py` (FastAPI job-queue service) + `tests/test_api.py`. Reuse the reconciled pipeline from `cli.py`. Context: guide §2.
+Phases 15-16 — Frontend (`web/`, Next.js + React Flow, full guide spec). Phase 17 — docs + ground-truth test.
 
 ---
 
-**Last Updated:** Session 12
-**Last Verified:** Session 12 — `python -m pytest tests/` → 284 passed
+**Last Updated:** Session 13
+**Last Verified:** Session 13 — `python -m pytest tests/` → 296 passed
